@@ -1,5 +1,5 @@
 """
-PTT Drink 版爬蟲主執行檔案
+PTT Drink 版爬    print("📅 爬取範圍: 近30天的文章")
 
 直接爬取 Drink 版面
 """
@@ -10,45 +10,16 @@ from ptt_crawler import crawl_ptt_page
 
 
 def main():
-    """主要執行函數 - 只爬取 Drink 版"""
+    """主要執行函數 - 自動爬取 Drink 版近30天資料"""
     print("=== PTT Drink 版爬蟲程式 ===")
     print("🚀 啟動 PTT 爬蟲")
     print("🎯 固定爬取版面: Drink")
-    print()
-
-    # 詢問要爬取的頁數
-    try:
-        page_input = input("請輸入要爬取的頁數 (直接按 Enter 爬取所有頁面): ").strip()
-        if page_input:
-            page_num = int(page_input)
-            if page_num <= 0:
-                print("頁數必須大於 0，改為爬取所有頁面")
-                crawl_all = True
-                page_num = None
-            else:
-                crawl_all = False
-        else:
-            # 預設爬取所有頁面
-            crawl_all = True
-            page_num = None
-    except ValueError:
-        print("輸入無效，改為爬取所有頁面")
-        crawl_all = True
-        page_num = None
-
-    if crawl_all:
-        print(f"\n📝 將爬取 Drink 版所有頁面")
-        print("⚠️  這可能需要很長時間，請耐心等候")
-    else:
-        print(f"\n📝 將爬取 Drink 版 {page_num} 頁")
+    print("� 爬取範圍: 近三天的文章")
     print("=" * 50)
 
     try:
-        # 直接開始爬蟲
-        if crawl_all:
-            data = crawl_ptt_page(Board_Name='Drink', crawl_all=True)
-        else:
-            data = crawl_ptt_page(Board_Name='Drink', page_num=page_num)
+        # 直接開始爬取近30天的資料
+        data = crawl_ptt_page(Board_Name='Drink', crawl_recent_days=True, target_days=30)
 
         if not data.empty:
             current_count = len(data)

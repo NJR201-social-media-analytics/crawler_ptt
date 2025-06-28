@@ -36,7 +36,7 @@ brew install uv
 ### 2. 克隆專案
 ```bash
 git clone <你的專案網址>
-cd ptt_crawler
+cd crawler_ptt
 ```
 
 ### 3. 初始化環境

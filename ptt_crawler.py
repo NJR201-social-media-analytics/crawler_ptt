@@ -77,14 +77,35 @@ def parse_title(title):
         tuple: (category, is_reply, is_forward)
 
     Example:
-        >>> parse_title('Re: [問卦] 睡覺到底可不可以穿襪子')
-        ('問卦', True, False)
+        >>> parse_title('[問題] 這個飲料好喝嗎？')
+        ('問題', False, False)
+        >>> parse_title('Re: [心得] 某飲料店評價')
+        ('心得', True, False)
+        >>> parse_title('普通標題沒有分類')
+        ('無分類', False, False)
     """
-    _, _, remain = title.partition('[')
-    category, _, remain = remain.rpartition(']')
-    category = category if category else None
-    isreply = True if 'Re:' in title else False
-    isforward = True if 'Fw:' in title else False
+    # 檢查是否為回覆或轉發文章
+    isreply = 'Re:' in title
+    isforward = 'Fw:' in title
+    
+    # 尋找第一個 [ 和對應的 ]
+    start_bracket = title.find('[')
+    if start_bracket == -1:
+        # 沒有找到 [，設為無分類
+        return '無分類', isreply, isforward
+    
+    end_bracket = title.find(']', start_bracket)
+    if end_bracket == -1:
+        # 有 [ 但沒有對應的 ]，設為無分類
+        return '無分類', isreply, isforward
+    
+    # 提取第一個 [] 內的內容
+    category = title[start_bracket + 1:end_bracket].strip()
+    
+    # 如果提取到的分類為空，設為無分類
+    if not category:
+        return '無分類', isreply, isforward
+    
     return category, isreply, isforward
 
 
@@ -524,16 +545,17 @@ class Pushes:
         return msgs
 
 
-def ptt_crawl(Board_Name, start, page):
+def ptt_crawl(Board_Name, start, page, target_date=None):
     """爬取單一頁面的文章資料
 
     Args:
         Board_Name (str): 版面名稱
         start (int): 起始頁面編號
         page (int): 頁面偏移量
+        target_date (datetime): 目標日期，只爬取此日期之後的文章
 
     Returns:
-        pandas.DataFrame: 包含文章資訊的 DataFrame
+        tuple: (pandas.DataFrame, bool) - (包含文章資訊的 DataFrame, 是否應該停止爬取)
     """
     Board = ArticleListPage.from_board
 
@@ -579,7 +601,7 @@ def ptt_crawl(Board_Name, start, page):
         except Exception as save_error:
             print(f'無法儲存錯誤頁面: {save_error}')
 
-        return pd.DataFrame()
+        return pd.DataFrame(), False
 
     # 抓取資料
     ptt_aid = []
@@ -598,6 +620,9 @@ def ptt_crawl(Board_Name, start, page):
     ptt_score = []
     ptt_comment = []
 
+    should_stop = False
+    old_articles_count = 0
+
     for summary in latest_page:  # 只要抓最新的頁面
         if summary.isremoved:
             continue
@@ -607,6 +632,21 @@ def ptt_crawl(Board_Name, start, page):
 
         try:
             article = summary.read()
+            
+            # 如果有設定目標日期，檢查文章日期
+            if target_date and article.datetime:
+                if article.datetime < target_date:
+                    old_articles_count += 1
+                    print(f'📅 文章日期過舊：{article.datetime.strftime("%Y-%m-%d %H:%M")}，跳過')
+                    # 如果連續發現多篇過舊文章，可能整頁都是舊文章
+                    if old_articles_count >= 3:
+                        print(f'📅 發現連續 {old_articles_count} 篇過舊文章，可能需要停止爬取')
+                        should_stop = True
+                    continue
+                else:
+                    # 重置計數器，因為找到了新文章
+                    old_articles_count = 0
+            
             # 將所有內容儲存在一個[]
             ptt_aid.append(article.aid)
             ptt_author.append(article.author)
@@ -697,11 +737,14 @@ def ptt_crawl(Board_Name, start, page):
     final_data = final_data[final_data['標題'] != '']
 
     print(f'頁面處理完成 - 成功: {success_count} 筆，錯誤: {error_count} 筆')
+    
+    if target_date:
+        print(f'📅 過舊文章: {old_articles_count} 篇（早於 {target_date.strftime("%Y-%m-%d")}）')
 
-    return final_data
+    return final_data, should_stop
 
 
-def crawl_ptt_page(Board_Name='Drink', start='', page_num=5, crawl_all=False):
+def crawl_ptt_page(Board_Name='Drink', start='', page_num=5, crawl_all=False, crawl_recent_days=False, target_days=3):
     """爬取 PTT 版面指定數量的頁面
 
     Args:
@@ -709,21 +752,31 @@ def crawl_ptt_page(Board_Name='Drink', start='', page_num=5, crawl_all=False):
         start (str): 起始頁面編號，空字串代表從最新頁面開始
         page_num (int): 要爬取的頁面數量，預設為 5
         crawl_all (bool): 是否爬取所有頁面，預設為 False
+        crawl_recent_days (bool): 是否按日期爬取近期頁面，預設為 False
+        target_days (int): 爬取近幾天的文章，預設為 3
 
     Returns:
         pandas.DataFrame: 包含文章資訊的 DataFrame
     """
     if crawl_all:
         print(f'🌟 開始爬取 {Board_Name} 版的所有頁面')
+    elif crawl_recent_days:
+        print(f'🌟 開始爬取 {Board_Name} 版近 {target_days} 天的文章')
     else:
         print(f'🌟 開始爬取 {Board_Name} 版，共 {page_num} 頁')
     print('=' * 50)
+
+    # 計算目標日期（近N天）
+    if crawl_recent_days:
+        target_date = datetime.datetime.now() - datetime.timedelta(days=target_days)
+        print(f'📅 目標日期：{target_date.strftime("%Y年%m月%d日")} 之後的文章')
 
     t_start = time.time()  # 計時開始
     result_list = []
     total_success = 0
     total_errors = 0
     page_errors = 0
+    articles_too_old = 0
 
     # 建立主要錯誤記錄目錄
     error_dir = os.path.join('errors', Board_Name)
@@ -752,6 +805,9 @@ def crawl_ptt_page(Board_Name='Drink', start='', page_num=5, crawl_all=False):
     if crawl_all:
         max_pages = start  # 從最新頁面爬到第1頁
         print(f'📊 預估最多爬取約 {max_pages} 頁')
+    elif crawl_recent_days:
+        max_pages = 200  # 設定一個合理的上限，避免無限循環
+        print(f'📊 最多爬取 {max_pages} 頁（直到找到 {target_days} 天前的文章）')
     else:
         max_pages = page_num
 
@@ -767,11 +823,15 @@ def crawl_ptt_page(Board_Name='Drink', start='', page_num=5, crawl_all=False):
                 
                 if crawl_all:
                     print(f'\n--- 處理第 {pages_crawled+1} 頁 (頁面編號: {page_index}) ---')
+                elif crawl_recent_days:
+                    print(f'\n--- 處理第 {pages_crawled+1} 頁 (頁面編號: {page_index}) - 尋找近 {target_days} 天文章 ---')
                 else:
                     print(f'\n--- 處理第 {pages_crawled+1}/{page_num} 頁 (頁面編號: {page_index}) ---')
 
-                page_data = ptt_crawl(Board_Name=Board_Name,
-                                      start=start, page=pages_crawled)
+                # 傳遞目標日期給 ptt_crawl
+                target_date_param = target_date if crawl_recent_days else None
+                page_data, should_stop = ptt_crawl(Board_Name=Board_Name,
+                                      start=start, page=pages_crawled, target_date=target_date_param)
 
                 if not page_data.empty:
                     result_list.append(page_data)
@@ -781,6 +841,11 @@ def crawl_ptt_page(Board_Name='Drink', start='', page_num=5, crawl_all=False):
                 else:
                     print(f'第 {pages_crawled+1} 頁無有效資料')
                     page_errors += 1
+
+                # 如果是按日期爬取且發現過舊文章，考慮停止
+                if crawl_recent_days and should_stop:
+                    print(f'📅 發現過舊文章，停止爬取')
+                    break
 
                 pages_crawled += 1
 
@@ -852,6 +917,12 @@ def crawl_ptt_page(Board_Name='Drink', start='', page_num=5, crawl_all=False):
     print(f'🎉 爬取任務完成！')
     print(f'📊 統計報告:')
     print(f'   └─ 版面: {Board_Name}')
+    if crawl_recent_days:
+        print(f'   └─ 爬取模式: 近 {target_days} 天文章')
+    elif crawl_all:
+        print(f'   └─ 爬取模式: 所有頁面')
+    else:
+        print(f'   └─ 爬取模式: 指定 {page_num} 頁')
     print(f'   └─ 處理頁面: {pages_crawled} 頁')
     print(f'   └─ 頁面錯誤: {page_errors} 頁')
     print(f'   └─ 成功文章: {total_success} 篇')
@@ -883,28 +954,22 @@ def crawl_ptt_page(Board_Name='Drink', start='', page_num=5, crawl_all=False):
 
 
 def main():
-    """簡化的主程式 - 只爬取 Drink 版"""
+    """自動執行 PTT Drink 版爬蟲 - 爬取近三天的頁面"""
     print('=== PTT Drink 版爬蟲工具 ===')
-    print('固定爬取 Drink 版面')
+    print('自動開始爬取 Drink 版面 - 近三天的文章')
     
     board_name = 'Drink'  # 固定爬取 Drink 版
+    start_input = ''       # 使用最新頁面
+    crawl_recent_days = True  # 爬取近期頁面
+    target_days = 3        # 爬取近三天
 
-    print('請輸入您想從第幾頁開始爬（直接按 Enter 使用最新頁面）：')
-    start_input = input().strip()
-
-    print('請輸入您想爬幾頁：')
-    try:
-        page_num = int(input().strip())
-        if page_num <= 0:
-            print('頁面數量必須大於 0')
-            return
-    except ValueError:
-        print('請輸入有效的數字')
-        return
+    print(f'設定：從最新頁面開始，爬取近 {target_days} 天的文章')
+    print('⚠️  這會自動偵測文章日期並停止在三天前')
+    print('開始執行...\n')
 
     # 執行爬蟲
     try:
-        crawl_ptt_page(Board_Name=board_name, start=start_input, page_num=page_num)
+        crawl_ptt_page(Board_Name=board_name, start=start_input, crawl_recent_days=crawl_recent_days, target_days=target_days)
     except KeyboardInterrupt:
         print('\n使用者中斷執行')
     except Exception as e:
