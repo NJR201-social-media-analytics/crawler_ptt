@@ -1,0 +1,37 @@
+services:
+  mysql:
+    # 使用 MySQL 8.0 版本
+    image: mysql:8.0
+    platform: linux/amd64  # 支援 Apple Silicon Mac
+    ports:
+      - "3306:3306"  # 映射 MySQL 埠口
+    environment:
+      MYSQL_ROOT_PASSWORD: test  # 設定 root 密碼為 test
+      MYSQL_DATABASE: mydb       # 建立名為 mydb 的資料庫
+    volumes:
+      - mysql_data:/var/lib/mysql  # 持久化資料
+    networks:
+      - my_network
+
+  phpmyadmin:
+    # 使用 phpMyAdmin 來管理 MySQL 資料庫
+    image: phpmyadmin/phpmyadmin:5.1.0
+    platform: linux/amd64  # 支援 Apple Silicon Mac
+    ports:
+      - "8000:80"  # 映射到 8000 埠口
+    environment:
+      PMA_HOST: mysql  # 連接到 mysql 服務
+      PMA_PORT: 3306
+      PMA_USER: root
+      PMA_PASSWORD: test
+    depends_on:
+      - mysql
+    networks:
+      - my_network
+
+volumes:
+  mysql_data:  # 定義資料持久化卷
+
+networks:
+  my_network:
+    driver: bridge  # 自動建立網路

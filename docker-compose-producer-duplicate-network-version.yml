@@ -1,0 +1,18 @@
+services:
+  producer_ptt_crawler:  # 定義一個服務，名稱為 producer_ptt_crawler
+    image: ptt_crawler:${DOCKER_IMAGE_VERSION:-latest}  # 使用本地建構的映像檔
+    platform: linux/arm64  # 明確指定 ARM64 架構（適用於 Apple Silicon Mac）
+    pull_policy: never  # 不從 Docker Hub 拉取，使用本地映像檔
+    hostname: "producer_ptt"  # 設定 hostname = producer_ptt
+    command: uv run python crawler/producer_ptt_crawler.py
+    # 執行 PTT 爬蟲 producer 腳本，使用 uv run 發送爬蟲任務到 RabbitMQ
+    environment:
+      - TZ=Asia/Taipei  # 設定時區為台北（UTC+8）
+      - RABBITMQ_HOST=rabbitmq  # 在 Docker 網路中使用服務名稱
+      - MYSQL_HOST=mysql  # 在 Docker 網路中使用服務名稱
+    networks:
+      - my_network  # 將此服務連接到 my_network 網路
+
+networks:
+  my_network:
+    driver: bridge  # 自動建立網路

@@ -1,0 +1,20 @@
+services:
+  crawler_ptt:  # 定義一個服務，名稱為 crawler_ptt
+    image: ptt_crawler:${DOCKER_IMAGE_VERSION:-latest}  # 使用本地建構的映像檔
+    platform: linux/arm64  # 明確指定 ARM64 架構（適用於 Apple Silicon Mac）
+    pull_policy: never  # 不從 Docker Hub 拉取，使用本地映像檔
+    hostname: "ptt"  # 設定 hostname = ptt
+    command: uv run celery -A crawler.worker worker --loglevel=info --hostname=%h -Q ptt  
+    # 啟動容器後執行的命令，使用 uv run 啟動 Celery worker，指定 app 為 crawler.worker，設定日誌等級為 info，
+    # 使用主機名稱當作 worker 名稱（%h），並將此 worker 加入名為 "ptt" 的任務佇列 (queue)
+    restart: always  # 若容器停止或崩潰，自動重新啟動
+    environment:
+      - TZ=Asia/Taipei  # 設定時區為台北（UTC+8）
+      - RABBITMQ_HOST=rabbitmq  # 在 Docker 網路中使用服務名稱
+      - MYSQL_HOST=mysql  # 在 Docker 網路中使用服務名稱
+    networks:
+      - my_network  # 將此服務連接到 my_network 網路
+
+networks:
+  my_network:
+    driver: bridge  # 自動建立網路

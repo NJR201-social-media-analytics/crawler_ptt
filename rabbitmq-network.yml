@@ -1,0 +1,31 @@
+services:
+  rabbitmq:
+    # 使用 RabbitMQ 官方管理版的輕量 Alpine 版本映像檔
+    image: 'rabbitmq:3.6-management-alpine'
+    platform: linux/amd64  # 支援 Apple Silicon Mac
+    ports: 
+      - '5672:5672'       # 對外開放 RabbitMQ 的 AMQP 通訊埠（應用程式通訊埠）
+      - '15672:15672'     # 對外開放 RabbitMQ 的管理介面（Web UI）埠口
+    environment:
+      RABBITMQ_DEFAULT_USER: "worker"       # 預設使用者名稱設定為 worker
+      RABBITMQ_DEFAULT_PASS: "worker"       # 預設密碼設定為 worker
+      RABBITMQ_DEFAULT_VHOST: "/"            # 預設虛擬主機 (Virtual Host)
+    networks:
+      - my_network                          # 將服務加入名為 my_network 的自訂網路
+
+  flower:
+    # 使用 Flower 映像來監控 Celery 的任務佇列狀況
+    image: mher/flower:0.9.5
+    platform: linux/amd64  # 支援 Apple Silicon Mac
+    command: ["flower", "--broker=amqp://worker:worker@rabbitmq", "--port=5555"]  
+    # 啟動 Flower，設定 RabbitMQ 為 broker，並監聽 5555 埠口
+    ports: 
+      - 5555:5555                           # 映射 Flower 的監控介面埠口到宿主機
+    depends_on:
+      - rabbitmq                           # 確保 RabbitMQ 先啟動後，Flower 再啟動
+    networks:
+      - my_network                        # 將服務加入 my_network 網路
+
+networks:
+  my_network:                            # 定義一個名為 my_network 的自訂網路，方便服務間互相連線
+    driver: bridge
