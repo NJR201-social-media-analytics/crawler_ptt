@@ -25,6 +25,7 @@ app.conf.update(
     task_routes={
         'crawler.tasks_ptt_crawler.crawl_ptt_page_task': {'queue': 'ptt'},
         'crawler.tasks_ptt_crawler.crawl_ptt_recent_pages_task': {'queue': 'ptt'},
+        'crawler.tasks_ptt_crawler.crawl_single_article_task': {'queue': 'ptt'},
     },
     
     # Worker 設定

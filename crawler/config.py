@@ -4,6 +4,7 @@
 """
 import os
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, Column, String, Table, Text, Integer, Date, MetaData
 
 # 載入環境變數
 load_dotenv()
@@ -29,3 +30,40 @@ PTT_DELAY_MAX = float(os.getenv('PTT_DELAY_MAX', 1.5))
 PTT_TIMEOUT = int(os.getenv('PTT_TIMEOUT', 10))
 
 print(f"配置完成 - RabbitMQ: {RABBITMQ_HOST}:{RABBITMQ_PORT}, MySQL: {MYSQL_HOST}:{MYSQL_PORT}")
+
+
+# ============================================================================
+# 資料庫連接和表格結構（自動初始化模式）
+# ============================================================================
+
+# 建立資料庫連接和表格結構
+address = f"mysql+pymysql://{MYSQL_ACCOUNT}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+engine = create_engine(address)
+metadata = MetaData()
+
+# PTT 文章資料表結構 - 使用複合主鍵 (board, aid)
+ptt_articles_table = Table(
+    "ptt_articles",
+    metadata,
+    Column("board", String(50), primary_key=True),  # 版名，複合主鍵之一
+    Column("aid", String(20), primary_key=True),  # 文章編碼，複合主鍵之一
+    Column("author", String(100)),  # 作者
+    Column("title", String(500)),  # 標題
+    Column("category", String(100)),  # 分類
+    Column("content", Text),  # 內文
+    Column("date", String(100)),  # 日期（原始格式）
+    Column("ip", String(50)),  # IP位置
+    Column("pushes_all", Integer),  # 總留言數
+    Column("pushes_like", Integer),  # 推
+    Column("pushes_boo", Integer),  # 噓
+    Column("pushes_neutral", Integer),  # 中立
+    Column("pushes_score", Integer),  # 文章分數
+    Column("url", String(200)),  # 文章 URL
+    Column("crawl_time", Date),  # 爬取時間
+)
+
+# 自動初始化：在模組載入時就完成資料表初始化
+# 避免多 Worker 競爭建立資料表
+print("🛠️  正在初始化 PTT 文章資料表...")
+metadata.create_all(engine)
+print("✅ PTT 文章資料表初始化完成（自動初始化模式）")

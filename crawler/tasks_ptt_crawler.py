@@ -28,17 +28,21 @@ class Error(Exception):
     """此模組拋出的所有例外的基礎類別"""
     pass
 
+
 class InValidBeautifulSoupTag(Error):
     """因為無效的 BeautifulSoup 標籤而無法建立 ArticleSummary"""
     pass
+
 
 class NoGivenURLForPage(Error):
     """建立頁面時給定了 None 或空白的 URL"""
     pass
 
+
 class PageNotFound(Error):
     """無法透過給定的 URL 取得頁面"""
     pass
+
 
 class ArtitcleIsRemoved(Error):
     """無法從 ArticleSummary 讀取已被刪除的文章"""
@@ -59,20 +63,20 @@ def parse_title(title):
     """解析文章標題以獲取更多資訊"""
     isreply = 'Re:' in title
     isforward = 'Fw:' in title
-    
+
     start_bracket = title.find('[')
     if start_bracket == -1:
         return '無分類', isreply, isforward
-    
+
     end_bracket = title.find(']', start_bracket)
     if end_bracket == -1:
         return '無分類', isreply, isforward
-    
+
     category = title[start_bracket + 1:end_bracket].strip()
-    
+
     if not category:
         return '無分類', isreply, isforward
-    
+
     return category, isreply, isforward
 
 
@@ -162,18 +166,18 @@ class Page:
 
         self.url = url
         url = urllib.parse.urljoin(self.ptt_domain, self.url)
-        
+
         # 使用 fake-useragent 和 1 秒超時
         try:
             ua = UserAgent()
             user_agent = ua.random
         except:
             user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        
+
         resp = requests.get(
-            url=url, 
-            cookies={'over18': '1'}, 
-            verify=True, 
+            url=url,
+            cookies={'over18': '1'},
+            verify=True,
             timeout=PTT_TIMEOUT,
             headers={'User-Agent': user_agent}
         )
@@ -208,7 +212,8 @@ class ArticleListPage(Page):
         if idx:
             self.idx = int(idx)
         else:
-            _, self.board, basename = parse_std_url(self.related_urls['previous'])
+            _, self.board, basename = parse_std_url(
+                self.related_urls['previous'])
             _, _, idx = basename.partition('index')
             self.idx = int(idx)+1
 
@@ -264,10 +269,14 @@ class ArticlePage(Page):
         metas = main_content.find_all('div', class_='article-metaline')
 
         try:
-            self.author = metas[0].find('span', class_='article-meta-value').get_text()
-            self.title = metas[1].find('span', class_='article-meta-value').get_text()
-            self.datetime_str = metas[2].find('span', class_='article-meta-value').get_text()
-            self.datetime = datetime.datetime.strptime(self.datetime_str, '%a %b %d %H:%M:%S %Y')
+            self.author = metas[0].find(
+                'span', class_='article-meta-value').get_text()
+            self.title = metas[1].find(
+                'span', class_='article-meta-value').get_text()
+            self.datetime_str = metas[2].find(
+                'span', class_='article-meta-value').get_text()
+            self.datetime = datetime.datetime.strptime(
+                self.datetime_str, '%a %b %d %H:%M:%S %Y')
             self.date = self.datetime_str
         except (IndexError, ValueError):
             self.author = ''
@@ -291,17 +300,17 @@ class ArticlePage(Page):
     def _set_content(self):
         """設定文章內容"""
         main_content = self.soup.find('div', id='main-content')
-        
+
         # 移除 metaline
         for meta in main_content.find_all('div', class_='article-metaline'):
             meta.extract()
         for meta in main_content.find_all('div', class_='article-metaline-right'):
             meta.extract()
-        
+
         # 移除推文
         for push in main_content.find_all('div', class_='push'):
             push.extract()
-            
+
         self.content = main_content.get_text().strip()
 
     def _set_ip(self):
@@ -339,24 +348,29 @@ class PushesHandler:
         """解析推文"""
         pushes = []
         push_tags = self.soup.find_all('div', class_='push')
-        
+
         for push_tag in push_tags:
             try:
-                push_type = push_tag.find('span', class_='push-tag').get_text().strip()
-                push_user = push_tag.find('span', class_='push-userid').get_text().strip()
-                push_content = push_tag.find('span', class_='push-content').get_text().strip()
-                push_ipdatetime = push_tag.find('span', class_='push-ipdatetime').get_text().strip()
-                
-                pushes.append(Msg(push_type, push_user, push_content, push_ipdatetime))
+                push_type = push_tag.find(
+                    'span', class_='push-tag').get_text().strip()
+                push_user = push_tag.find(
+                    'span', class_='push-userid').get_text().strip()
+                push_content = push_tag.find(
+                    'span', class_='push-content').get_text().strip()
+                push_ipdatetime = push_tag.find(
+                    'span', class_='push-ipdatetime').get_text().strip()
+
+                pushes.append(Msg(push_type, push_user,
+                              push_content, push_ipdatetime))
             except:
                 continue
-                
+
         return pushes
 
     def _count_pushes(self):
         """計算推文數量"""
         count = {'all': 0, 'like': 0, 'boo': 0, 'neutral': 0}
-        
+
         for push in self.pushes:
             count['all'] += 1
             if '推' in push.type:
@@ -365,7 +379,7 @@ class PushesHandler:
                 count['boo'] += 1
             else:
                 count['neutral'] += 1
-                
+
         count['score'] = count['like'] - count['boo']
         return count
 
@@ -374,41 +388,9 @@ class PushesHandler:
         return [f"{push.type} {push.user}: {push.content}" for push in self.pushes]
 
 
-# 全域只建立一次 engine、metadata、table 並 create_all
-address = f"mysql+pymysql://{MYSQL_ACCOUNT}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
-engine = create_engine(address)
-metadata = MetaData()
-
-# PTT 文章資料表結構
-ptt_articles_table = Table(
-    "ptt_articles",
-    metadata,
-    Column("aid", String(20), primary_key=True),  # 文章編碼作為主鍵
-    Column("board", String(50)),  # 版名
-    Column("author", String(100)),  # 作者
-    Column("title", String(500)),  # 標題
-    Column("category", String(100)),  # 分類
-    Column("content", Text),  # 內文
-    Column("date", String(100)),  # 日期（原始格式）
-    Column("ip", String(50)),  # IP位置
-    Column("pushes_all", Integer),  # 總留言數
-    Column("pushes_like", Integer),  # 推
-    Column("pushes_boo", Integer),  # 噓
-    Column("pushes_neutral", Integer),  # 中立
-    Column("pushes_score", Integer),  # 文章分數
-    Column("url", String(200)),  # 文章 URL
-    Column("crawl_time", Date),  # 爬取時間
-)
-
-def init_database():
-    """初始化資料庫，建立資料表"""
-    try:
-        metadata.create_all(engine)
-        print("PTT 文章資料表已初始化")
-        return True
-    except Exception as e:
-        print(f"初始化資料庫失敗: {e}")
-        return False
+# 從 config.py 匯入共用的資料庫連接和表格定義
+# 注意：資料表初始化已在 config.py 模組載入時完成（自動初始化模式）
+from crawler.config import engine, ptt_articles_table
 
 
 def upload_ptt_data_to_mysql(df: pd.DataFrame):
@@ -417,12 +399,22 @@ def upload_ptt_data_to_mysql(df: pd.DataFrame):
         print("無資料需要上傳")
         return 0
 
-    print(f"準備上傳 {len(df)} 筆 PTT 文章資料到 MySQL...")
+    print(f"💾 準備上傳 {len(df)} 筆 PTT 文章資料到 MySQL...")
+
+    # 顯示即將上傳的文章標題 (最多顯示前3篇)
+    sample_count = min(3, len(df))
+    print(f"📝 樣本文章:")
+    for i in range(sample_count):
+        title = df.iloc[i]['title'] if 'title' in df.columns else '無標題'
+        aid = df.iloc[i]['aid'] if 'aid' in df.columns else '無編號'
+        print(f"   {i+1}. [{aid}] {title[:40]}...")
+    if len(df) > sample_count:
+        print(f"   ... 還有 {len(df) - sample_count} 筆文章")
 
     # 準備資料
     df_copy = df.copy()
     df_copy['crawl_time'] = datetime.date.today()
-    
+
     # 確保所有必要欄位存在
     required_columns = {
         'aid': '',
@@ -440,7 +432,7 @@ def upload_ptt_data_to_mysql(df: pd.DataFrame):
         'pushes_score': 0,
         'url': ''
     }
-    
+
     for col, default_value in required_columns.items():
         if col not in df_copy.columns:
             # 如果欄位完全不存在，才添加並設為默認值
@@ -458,7 +450,7 @@ def upload_ptt_data_to_mysql(df: pd.DataFrame):
 
     # 只保留需要的欄位
     df_copy = df_copy[list(required_columns.keys()) + ['crawl_time']]
-    
+
     # ===== DEBUG: 輸出要送到資料庫的資料內容 =====
     print("=" * 80)
     print("🔍 DEBUG: 準備上傳到資料庫的資料:")
@@ -470,7 +462,8 @@ def upload_ptt_data_to_mysql(df: pd.DataFrame):
         for col, value in row.items():
             if col == 'content':
                 # content 可能很長，只顯示前50字
-                content_preview = str(value)[:50] + "..." if len(str(value)) > 50 else str(value)
+                content_preview = str(
+                    value)[:50] + "..." if len(str(value)) > 50 else str(value)
                 print(f"    {col}: {content_preview}")
             else:
                 print(f"    {col}: {value}")
@@ -480,43 +473,75 @@ def upload_ptt_data_to_mysql(df: pd.DataFrame):
 
     try:
         # 使用 MySQL 的 ON DUPLICATE KEY UPDATE 來處理重複資料
-        with engine.connect() as conn:
-            with conn.begin():  # 使用事務
-                data_dict = df_copy.to_dict('records')
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                with engine.connect() as conn:
+                    with conn.begin():  # 使用事務
+                        data_dict = df_copy.to_dict('records')
+
+                        # 使用 MySQL 的 INSERT ... ON DUPLICATE KEY UPDATE
+                        stmt = insert(ptt_articles_table).values(data_dict)
+
+                        # 定義更新的欄位（除了主鍵 aid）
+                        update_dict = {
+                            col.name: stmt.inserted[col.name]
+                            for col in ptt_articles_table.columns
+                            if col.name != 'aid'
+                        }
+
+                        stmt = stmt.on_duplicate_key_update(**update_dict)
+                        result = conn.execute(stmt)
+
+                        print(f"✅ 成功處理 {len(data_dict)} 筆 PTT 文章資料（新增或更新）")
+                        print(f"💾 資料已儲存到 MySQL 資料庫的 ptt_articles 資料表")
+                        return len(data_dict)
+                        
+            except Exception as db_error:
+                retry_count += 1
+                error_msg = str(db_error).lower()
                 
-                # 使用 MySQL 的 INSERT ... ON DUPLICATE KEY UPDATE
-                stmt = insert(ptt_articles_table).values(data_dict)
-                
-                # 定義更新的欄位（除了主鍵 aid）
-                update_dict = {
-                    col.name: stmt.inserted[col.name] 
-                    for col in ptt_articles_table.columns 
-                    if col.name != 'aid'
-                }
-                
-                stmt = stmt.on_duplicate_key_update(**update_dict)
-                result = conn.execute(stmt)
-                
-                print(f"成功處理 {len(data_dict)} 筆 PTT 文章資料（新增或更新）")
-                return len(data_dict)
-            
+                # 檢查是否是可重試的錯誤
+                if any(keyword in error_msg for keyword in [
+                    "deadlock", "lock wait timeout", "connection", "timeout"
+                ]):
+                    if retry_count < max_retries:
+                        wait_time = retry_count * 0.5  # 遞增等待時間
+                        print(f"⚠️ 資料庫操作遇到併發問題，第 {retry_count} 次重試 (等待 {wait_time}s): {db_error}")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        print(f"❌ 重試 {max_retries} 次後仍失敗: {db_error}")
+                        break
+                else:
+                    # 非可重試錯誤，直接拋出
+                    raise db_error
+                    
+        # 如果所有重試都失敗了
+        return 0
+
     except Exception as e:
-        print(f"上傳 PTT 文章資料時發生錯誤：{e}")
+        print(f"❌ 上傳 PTT 文章資料時發生錯誤：{e}")
         return 0
 
 
 def ptt_crawl_single_page(board_name, page_index, target_date=None):
     """爬取單一頁面的文章資料"""
-    print(f'正在處理 {board_name} 版第 {page_index} 頁')
-    
+    page_url = f'https://www.ptt.cc/bbs/{board_name}/index{page_index}.html'
+    print(f'📄 正在處理 {board_name} 版第 {page_index} 頁')
+    print(f'🔗 頁面 URL: {page_url}')
+
     error_count = 0
     success_count = 0
-    
+
     try:
         # 抓該板頁面的文章
         latest_page = ArticleListPage.from_board(board_name, page_index)
+        print(f'✅ 成功載入頁面，準備處理文章列表')
     except Exception as e:
-        print(f'無法載入頁面 {page_index}，錯誤: {e}')
+        print(f'❌ 無法載入頁面 {page_index}，錯誤: {e}')
         return pd.DataFrame(), False
 
     # 準備資料收集的列表
@@ -543,27 +568,30 @@ def ptt_crawl_single_page(board_name, page_index, target_date=None):
         if summary.isremoved:
             continue
 
-        print(f'正在抓資料中...{summary.title[:50]}...')
-        
+        print(f'📰 正在抓資料中...{summary.title[:50]}...')
+        print(f'🔗 文章 URL: {summary.url}')
+
         # 隨機延遲
         delay = random.uniform(PTT_DELAY_MIN, PTT_DELAY_MAX)
         time.sleep(delay)
 
         try:
             article = summary.read()
-            
+            print(f'✅ 成功讀取文章內容')
+
             # 如果有設定目標日期，檢查文章日期
             if target_date and article.datetime:
                 if article.datetime < target_date:
                     old_articles_count += 1
-                    print(f'📅 文章日期過舊：{article.datetime.strftime("%Y-%m-%d %H:%M")}，跳過')
+                    print(
+                        f'📅 文章日期過舊：{article.datetime.strftime("%Y-%m-%d %H:%M")}，跳過')
                     if old_articles_count >= 10:
                         print(f'📅 發現連續 {old_articles_count} 篇過舊文章，停止爬取此頁')
                         should_stop = True
                     continue
                 else:
                     old_articles_count = 0
-            
+
             # 收集文章資料
             ptt_aid.append(article.aid)
             ptt_author.append(article.author)
@@ -574,7 +602,7 @@ def ptt_crawl_single_page(board_name, page_index, target_date=None):
             ptt_url.append(article.url)
             ptt_date.append(article.date)
             ptt_ip.append(article.ip)
-            
+
             # 安全地收集推文數據，避免 NaN 值
             try:
                 if hasattr(article, 'pushes') and article.pushes is not None:
@@ -587,8 +615,10 @@ def ptt_crawl_single_page(board_name, page_index, target_date=None):
                         ptt_like.append(count_data.get('like', 0))
                         ptt_neutral.append(count_data.get('neutral', 0))
                         ptt_score.append(count_data.get('score', 0))
-                        ptt_comment.append(getattr(article.pushes, 'simple_expression', []))
-                        print(f"✅ 推文數據: 總 {count_data.get('all', 0)}, 推 {count_data.get('like', 0)}, 噓 {count_data.get('boo', 0)}")
+                        ptt_comment.append(
+                            getattr(article.pushes, 'simple_expression', []))
+                        print(
+                            f"✅ 推文數據: 總 {count_data.get('all', 0)}, 推 {count_data.get('like', 0)}, 噓 {count_data.get('boo', 0)}")
                     else:
                         # pushes 對象存在但 count 無效
                         raise ValueError("pushes.count 數據無效")
@@ -609,9 +639,10 @@ def ptt_crawl_single_page(board_name, page_index, target_date=None):
 
         except Exception as e:
             error_count += 1
-            article_title = summary.title if hasattr(summary, 'title') and summary.title else 'unknown'
+            article_title = summary.title if hasattr(
+                summary, 'title') and summary.title else 'unknown'
             print(f'處理文章時發生錯誤: {article_title[:30]}... - {str(e)[:100]}')
-            
+
             # 重要：即使發生錯誤，也要添加占位數據以保持列表長度一致
             # 這些數據會在後續被過濾掉
             ptt_aid.append('')  # 空字符串，會被過濾
@@ -630,7 +661,7 @@ def ptt_crawl_single_page(board_name, page_index, target_date=None):
             ptt_score.append(0)
             ptt_comment.append([])
             print(f"📝 添加占位數據以保持列表一致性（將被過濾）")
-            
+
             continue
 
     # 建立 DataFrame（使用英文欄位名稱，對應資料庫結構）
@@ -641,7 +672,7 @@ def ptt_crawl_single_page(board_name, page_index, target_date=None):
     print(f"    ptt_like: {len(ptt_like)}")
     print(f"    ptt_boo: {len(ptt_boo)}")
     print(f"    ptt_neutral: {len(ptt_neutral)}")
-    
+
     dic = {
         'aid': ptt_aid,
         'author': ptt_author,
@@ -658,23 +689,25 @@ def ptt_crawl_single_page(board_name, page_index, target_date=None):
         'pushes_score': ptt_score,
         'url': ptt_url  # 使用收集的 URL 列表
     }
-    
+
     final_data = pd.DataFrame(dic)
     print(f"📋 DataFrame 建立完成，原始數據: {len(final_data)} 筆")
-    
+
     # 顯示推文數據統計
     print(f"📈 推文數據統計:")
     print(f"  推文數 > 0 的文章: {len(final_data[final_data['pushes_all'] > 0])} 筆")
     print(f"  推文數 = 0 的文章: {len(final_data[final_data['pushes_all'] == 0])} 筆")
-    
+
     # 過濾掉標題為空的文章（錯誤處理產生的占位數據）
     final_data = final_data[final_data['title'] != '']
-    print(f"📋 過濾後數據: {len(final_data)} 筆（移除了 {len(dic['aid']) - len(final_data)} 筆錯誤數據）")
+    print(
+        f"📋 過濾後數據: {len(final_data)} 筆（移除了 {len(dic['aid']) - len(final_data)} 筆錯誤數據）")
 
     print(f'頁面處理完成 - 成功: {success_count} 筆，錯誤: {error_count} 筆')
-    
+
     if target_date:
-        print(f'📅 過舊文章: {old_articles_count} 篇（早於 {target_date.strftime("%Y-%m-%d")}）')
+        print(
+            f'📅 過舊文章: {old_articles_count} 篇（早於 {target_date.strftime("%Y-%m-%d")}）')
 
     return final_data, should_stop
 
@@ -682,20 +715,19 @@ def ptt_crawl_single_page(board_name, page_index, target_date=None):
 @app.task(bind=True)
 def crawl_ptt_page_task(self, board_name=None, page_index=None, target_days=None):
     """Celery 任務：爬取 PTT 指定頁面"""
-    # 初始化資料庫
-    if not init_database():
-        return {'status': 'error', 'message': '資料庫初始化失敗'}
-    
+    # 注意：不再負責資料庫初始化，由 Producer 負責
+
     if board_name is None:
         board_name = PTT_BOARD
-    
+
     if page_index is None:
         # 自動偵測最新頁面
         try:
             index_url = f'https://www.ptt.cc/bbs/{board_name}/index.html'
             index_page = ArticleListPage(index_url)
             previous_url = index_page.previous.url
-            page_index = int(previous_url[previous_url.find('index')+5:previous_url.find('.html')]) + 1
+            page_index = int(previous_url[previous_url.find(
+                'index')+5:previous_url.find('.html')]) + 1
             print(f'自動偵測起始頁面: {page_index}')
         except Exception as e:
             print(f'無法取得起始頁面，使用預設值: {e}')
@@ -709,14 +741,15 @@ def crawl_ptt_page_task(self, board_name=None, page_index=None, target_days=None
 
     try:
         print(f"開始爬取 {board_name} 版第 {page_index} 頁")
-        
+
         # 爬取單一頁面
-        df, should_stop = ptt_crawl_single_page(board_name, page_index, target_date)
-        
+        df, should_stop = ptt_crawl_single_page(
+            board_name, page_index, target_date)
+
         if not df.empty:
             # 上傳到資料庫
             uploaded_count = upload_ptt_data_to_mysql(df)
-            
+
             result = {
                 'status': 'success',
                 'board': board_name,
@@ -725,10 +758,11 @@ def crawl_ptt_page_task(self, board_name=None, page_index=None, target_days=None
                 'articles_uploaded': uploaded_count,
                 'should_stop': should_stop
             }
-            
-            print(f"✅ 任務完成：{board_name} 第 {page_index} 頁，找到 {len(df)} 篇文章，上傳 {uploaded_count} 筆")
+
+            print(
+                f"✅ 任務完成：{board_name} 第 {page_index} 頁，找到 {len(df)} 篇文章，上傳 {uploaded_count} 筆")
             return result
-            
+
         else:
             print(f"⚠️  第 {page_index} 頁無有效資料")
             return {
@@ -739,7 +773,7 @@ def crawl_ptt_page_task(self, board_name=None, page_index=None, target_days=None
                 'articles_uploaded': 0,
                 'should_stop': should_stop
             }
-            
+
     except Exception as e:
         print(f"❌ 爬取任務失敗：{str(e)}")
         return {
@@ -753,73 +787,85 @@ def crawl_ptt_page_task(self, board_name=None, page_index=None, target_days=None
 @app.task(bind=True)
 def crawl_ptt_recent_pages_task(self, board_name=None, target_days=7, max_pages=None):
     """Celery 任務：爬取 PTT 近期文章（多頁）"""
-    # 初始化資料庫
-    if not init_database():
-        return {'status': 'error', 'message': '資料庫初始化失敗'}
-    
+    print(f"🔥 Worker 接收到任務!")
+    print(f"📝 接收到的參數:")
+    print(f"   board_name = {board_name}")
+    print(f"   target_days = {target_days}")
+    print(f"   max_pages = {max_pages}")
+    print(f"   任務 ID = {self.request.id}")
+
+    # 注意：不再負責資料庫初始化，由 Producer 負責
+
     if board_name is None:
         board_name = PTT_BOARD
-    
+
     if max_pages is None:
-        print(f"🌟 開始爬取 {board_name} 版近 {target_days} 天的文章（無頁數限制，直到找到所有指定天數內的文章）")
+        print(
+            f"🌟 開始爬取 {board_name} 版近 {target_days} 天的文章（無頁數限制，直到找到所有指定天數內的文章）")
     else:
         print(f"🌟 開始爬取 {board_name} 版近 {target_days} 天的文章（最多 {max_pages} 頁）")
-    
+
     # 計算目標日期
     target_date = datetime.datetime.now() - datetime.timedelta(days=target_days)
     print(f'📅 目標日期：{target_date.strftime("%Y年%m月%d日")} 之後的文章')
-    
+
     # 取得起始頁面
     try:
         index_url = f'https://www.ptt.cc/bbs/{board_name}/index.html'
+        print(f'🌐 正在連接: {index_url}')
         index_page = ArticleListPage(index_url)
         previous_url = index_page.previous.url
-        start_page = int(previous_url[previous_url.find('index')+5:previous_url.find('.html')]) + 1
-        print(f'自動偵測起始頁面: {start_page}')
+        start_page = int(previous_url[previous_url.find(
+            'index')+5:previous_url.find('.html')]) + 1
+        print(f'✅ 自動偵測起始頁面: {start_page}')
+        print(
+            f'🔗 起始頁面 URL: https://www.ptt.cc/bbs/{board_name}/index{start_page}.html')
     except Exception as e:
-        print(f'無法取得起始頁面，使用預設值: {e}')
+        print(f'❌ 無法取得起始頁面，使用預設值: {e}')
         start_page = 1
-    
+
     total_articles = 0
     total_uploaded = 0
     pages_processed = 0
-    
+
     try:
         page_count = 0
         while True:
             current_page = start_page - page_count
-            
+
             if current_page <= 0:
                 print('已到達最早頁面，爬取完成')
                 break
-            
+
             # 如果設定了最大頁數限制，檢查是否超過
             if max_pages is not None and page_count >= max_pages:
                 print(f'已達到最大頁數限制 ({max_pages} 頁)，停止爬取')
                 break
-                
+
             print(f"\n--- 處理第 {page_count+1} 頁 (頁面編號: {current_page}) ---")
-            
+
             # 爬取單一頁面
-            df, should_stop = ptt_crawl_single_page(board_name, current_page, target_date)
-            
+            df, should_stop = ptt_crawl_single_page(
+                board_name, current_page, target_date)
+
             if not df.empty:
                 # 上傳到資料庫
                 uploaded_count = upload_ptt_data_to_mysql(df)
                 total_articles += len(df)
                 total_uploaded += uploaded_count
-                print(f'第 {page_count+1} 頁完成，成功取得 {len(df)} 筆資料，上傳 {uploaded_count} 筆')
+                print(
+                    f'第 {page_count+1} 頁完成，成功取得 {len(df)} 筆資料，上傳 {uploaded_count} 筆')
             else:
                 print(f'第 {page_count+1} 頁無有效資料')
-            
+
             pages_processed += 1
             page_count += 1
-            
+
             # 如果發現過舊文章，停止爬取
             if should_stop:
                 print(f'📅 發現過舊文章，停止爬取')
                 break
-        
+
         result = {
             'status': 'success',
             'board': board_name,
@@ -828,10 +874,11 @@ def crawl_ptt_recent_pages_task(self, board_name=None, target_days=7, max_pages=
             'total_articles': total_articles,
             'total_uploaded': total_uploaded
         }
-        
-        print(f"✅ 批量爬取完成：{board_name} 版，處理 {pages_processed} 頁，找到 {total_articles} 篇文章，上傳 {total_uploaded} 筆")
+
+        print(
+            f"✅ 批量爬取完成：{board_name} 版，處理 {pages_processed} 頁，找到 {total_articles} 篇文章，上傳 {total_uploaded} 筆")
         return result
-        
+
     except Exception as e:
         print(f"❌ 批量爬取任務失敗：{str(e)}")
         return {
@@ -842,9 +889,6 @@ def crawl_ptt_recent_pages_task(self, board_name=None, target_days=7, max_pages=
             'total_uploaded': total_uploaded,
             'error': str(e)
         }
-
-
-
 
 
 def get_ptt_user_agent():
@@ -865,50 +909,51 @@ def simple_ptt_crawl(board_name, page_index, target_date=None):
             url = f'https://www.ptt.cc/bbs/{board_name}/index{page_index}.html'
         else:
             url = f'https://www.ptt.cc/bbs/{board_name}/index.html'
-        
+
         print(f"正在爬取: {url}")
-        
+
         # 發送請求
         headers = {'User-Agent': get_ptt_user_agent()}
-        response = requests.get(url, cookies={'over18': '1'}, headers=headers, timeout=PTT_TIMEOUT)
-        
+        response = requests.get(
+            url, cookies={'over18': '1'}, headers=headers, timeout=PTT_TIMEOUT)
+
         if response.status_code != 200:
             print(f"頁面請求失敗: {response.status_code}")
             return pd.DataFrame(), False
-        
+
         # 解析頁面
         soup = BeautifulSoup(response.text, 'html.parser')
         article_tags = soup.find_all('div', 'r-ent')
-        
+
         # 存儲文章資料
         articles_data = []
         should_stop = False
-        
+
         for tag in article_tags:
             try:
                 # 取得標題和 URL
                 title_tag = tag.find('div', class_='title')
                 a_tag = title_tag.find('a') if title_tag else None
-                
+
                 if not a_tag:
                     continue  # 跳過已刪除的文章
-                
+
                 title = a_tag.get_text().strip()
                 article_url = a_tag.get('href').strip()
-                
+
                 # 取得其他資訊
                 score_tag = tag.find('div', class_='nrec')
                 score = score_tag.get_text().strip() if score_tag else ''
-                
+
                 date_tag = tag.find('div', class_='date')
                 date = date_tag.get_text().strip() if date_tag else ''
-                
+
                 author_tag = tag.find('div', class_='author')
                 author = author_tag.get_text().strip() if author_tag else ''
-                
+
                 # 解析標題分類
                 category, isreply, isforward = parse_title(title)
-                
+
                 # 建立文章資料
                 article_data = {
                     'aid': article_url.split('/')[-1].replace('.html', '') if article_url else '',
@@ -926,19 +971,19 @@ def simple_ptt_crawl(board_name, page_index, target_date=None):
                     'pushes_score': 0,
                     'url': article_url,
                 }
-                
+
                 articles_data.append(article_data)
-                
+
             except Exception as e:
                 print(f"處理文章時發生錯誤: {e}")
                 continue
-        
+
         # 轉換為 DataFrame
         df = pd.DataFrame(articles_data)
         print(f"成功爬取 {len(df)} 篇文章摘要")
-        
+
         return df, should_stop
-        
+
     except Exception as e:
         print(f"爬取頁面時發生錯誤: {e}")
         return pd.DataFrame(), False
@@ -949,16 +994,16 @@ def crawl_ptt_page(board_name=None, page_index='', target_days=3):
     """爬取 PTT 版面指定頁面的文章摘要"""
     if not board_name:
         board_name = PTT_BOARD
-    
+
     print(f"開始爬取 PTT {board_name} 版，頁面: {page_index if page_index else '最新'}")
-    
+
     try:
         # 計算目標日期
         target_date = datetime.datetime.now() - datetime.timedelta(days=target_days)
-        
+
         # 爬取頁面
         df, should_stop = simple_ptt_crawl(board_name, page_index, target_date)
-        
+
         if not df.empty:
             # 上傳到 MySQL
             upload_ptt_data_to_mysql(df)
@@ -967,7 +1012,7 @@ def crawl_ptt_page(board_name=None, page_index='', target_days=3):
         else:
             print(f"PTT {board_name} 版第 {page_index} 頁無有效資料")
             return "無有效資料"
-            
+
     except Exception as e:
         error_msg = f"爬取 PTT {board_name} 版第 {page_index} 頁時發生錯誤: {e}"
         print(error_msg)
@@ -979,18 +1024,18 @@ def crawl_ptt_recent(board_name=None, max_pages=10, target_days=3):
     """爬取 PTT 版面近期多個頁面"""
     if not board_name:
         board_name = PTT_BOARD
-    
+
     print(f"開始爬取 PTT {board_name} 版近 {target_days} 天的文章，最多 {max_pages} 頁")
-    
+
     try:
         # 取得起始頁面編號
         index_url = f'https://www.ptt.cc/bbs/{board_name}/index.html'
-        response = requests.get(index_url, cookies={'over18': '1'}, 
-                              headers={'User-Agent': get_ptt_user_agent()}, timeout=PTT_TIMEOUT)
-        
+        response = requests.get(index_url, cookies={'over18': '1'},
+                                headers={'User-Agent': get_ptt_user_agent()}, timeout=PTT_TIMEOUT)
+
         if response.status_code != 200:
             return f"無法取得 {board_name} 版首頁"
-        
+
         soup = BeautifulSoup(response.text, 'html.parser')
         prev_link = soup.find('a', string='‹ 上頁')
         if prev_link:
@@ -998,30 +1043,30 @@ def crawl_ptt_recent(board_name=None, max_pages=10, target_days=3):
             start_index = int(prev_url.split('index')[1].split('.html')[0]) + 1
         else:
             start_index = 1
-        
+
         total_articles = 0
-        
+
         # 爬取多個頁面
         for page_offset in range(max_pages):
             page_index = start_index - page_offset
             if page_index <= 0:
                 break
-            
+
             print(f"爬取第 {page_offset + 1}/{max_pages} 頁 (index: {page_index})")
-            
+
             df, should_stop = simple_ptt_crawl(board_name, page_index)
-            
+
             if not df.empty:
                 upload_ptt_data_to_mysql(df)
                 total_articles += len(df)
                 print(f"第 {page_offset + 1} 頁完成，累計 {total_articles} 篇文章")
-            
+
             # 加入延遲
             delay = random.uniform(PTT_DELAY_MIN, PTT_DELAY_MAX)
             time.sleep(delay)
-        
+
         return f"成功爬取並儲存 {total_articles} 篇文章"
-        
+
     except Exception as e:
         error_msg = f"爬取 PTT {board_name} 版近期頁面時發生錯誤: {e}"
         print(error_msg)
@@ -1029,34 +1074,35 @@ def crawl_ptt_recent(board_name=None, max_pages=10, target_days=3):
 
 
 @app.task
-def crawl_single_article_task(article_url):
+@app.task(bind=True)
+def crawl_single_article_task(self, article_url):
     """
     單篇文章爬蟲任務
     接收文章網址，爬取該文章內容並存入資料庫
-    類似 crawler_demo 中的 crawler_finmind_duplicate 任務
+    注意：不再負責資料庫初始化，由 Producer 負責
     """
     print(f"🔗 開始爬取單篇文章: {article_url}")
-    
+
     try:
         # 檢查 URL 格式
         if not article_url or not article_url.startswith('https://www.ptt.cc/bbs/'):
             print(f"❌ 無效的文章網址: {article_url}")
             return {"status": "error", "message": "無效的文章網址"}
-        
+
         # 爬取文章內容
         article_data = crawl_single_article(article_url)
-        
+
         if not article_data:
             print(f"⚠️ 無法爬取文章內容: {article_url}")
             return {"status": "warning", "message": "無法爬取文章內容"}
-        
+
         # 儲存到資料庫
         df = pd.DataFrame([article_data])
         save_count = upload_ptt_data_to_mysql(df)
-        
+
         print(f"✅ 文章爬取完成: {article_data.get('title', 'unknown')[:30]}...")
         print(f"💾 資料庫儲存: {save_count} 筆")
-        
+
         return {
             "status": "success",
             "article_url": article_url,
@@ -1064,11 +1110,11 @@ def crawl_single_article_task(article_url):
             "save_count": save_count,
             "message": "文章爬取與儲存成功"
         }
-        
+
     except Exception as e:
         error_msg = f"爬取文章失敗: {str(e)}"
         print(f"❌ {error_msg}")
-        
+
         return {
             "status": "error",
             "article_url": article_url,
@@ -1083,57 +1129,61 @@ def crawl_single_article(article_url):
     try:
         ua = UserAgent()
         headers = {'User-Agent': ua.random}
-        
-        response = requests.get(article_url, cookies={'over18': '1'}, 
-                              headers=headers, timeout=PTT_TIMEOUT)
+
+        response = requests.get(article_url, cookies={'over18': '1'},
+                                headers=headers, timeout=PTT_TIMEOUT)
         response.raise_for_status()
-        
+
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         # 取得文章基本資訊
         main_content = soup.find('div', id='main-content')
         if not main_content:
             print(f"⚠️ 找不到文章內容: {article_url}")
             return None
-        
+
         # 解析 meta 資訊
         metas = main_content.find_all('div', class_='article-metaline')
         author = ""
         title = ""
         date = ""
-        
+
         try:
             if len(metas) >= 3:
-                author = metas[0].find('span', class_='article-meta-value').get_text().strip()
-                title = metas[1].find('span', class_='article-meta-value').get_text().strip()
-                date = metas[2].find('span', class_='article-meta-value').get_text().strip()
+                author = metas[0].find(
+                    'span', class_='article-meta-value').get_text().strip()
+                title = metas[1].find(
+                    'span', class_='article-meta-value').get_text().strip()
+                date = metas[2].find(
+                    'span', class_='article-meta-value').get_text().strip()
         except:
             # 使用備用方法
             title_element = soup.find('meta', property='og:title')
             title = title_element['content'] if title_element else "無標題"
-        
+
         # 解析標題分類
         category, isreply, isforward = parse_title(title)
-        
+
         # 取得文章 ID
-        aid = article_url.split('/')[-1].replace('.html', '') if article_url else ''
-        
+        aid = article_url.split(
+            '/')[-1].replace('.html', '') if article_url else ''
+
         # 取得版面名稱
         board = extract_board_from_url(article_url)
-        
+
         # 移除 meta 標籤並取得內文
         content_copy = main_content.__copy__()
         for meta in content_copy.find_all('div', class_='article-metaline'):
             meta.extract()
         for meta in content_copy.find_all('div', class_='article-metaline-right'):
             meta.extract()
-        
+
         # 移除推文
         for push in content_copy.find_all('div', class_='push'):
             push.extract()
-            
+
         content = content_copy.get_text().strip()
-        
+
         # 取得 IP
         ip = ""
         try:
@@ -1146,17 +1196,18 @@ def crawl_single_article(article_url):
                     ip = ip_match.group(1)
         except:
             pass
-        
+
         # 解析推文
         push_tags = soup.find_all('div', class_='push')
         pushes_all = len(push_tags)
         pushes_like = 0
         pushes_boo = 0
         pushes_neutral = 0
-        
+
         for push_tag in push_tags:
             try:
-                push_type = push_tag.find('span', class_='push-tag').get_text().strip()
+                push_type = push_tag.find(
+                    'span', class_='push-tag').get_text().strip()
                 if '推' in push_type:
                     pushes_like += 1
                 elif '噓' in push_type:
@@ -1165,9 +1216,9 @@ def crawl_single_article(article_url):
                     pushes_neutral += 1
             except:
                 pushes_neutral += 1
-        
+
         pushes_score = pushes_like - pushes_boo
-        
+
         # 建立文章資料 (符合資料庫結構)
         article_data = {
             'aid': aid,
@@ -1185,9 +1236,9 @@ def crawl_single_article(article_url):
             'pushes_score': pushes_score,
             'url': article_url
         }
-        
+
         return article_data
-        
+
     except Exception as e:
         print(f"❌ 爬取文章失敗 {article_url}: {e}")
         return None
@@ -1203,3 +1254,171 @@ def extract_board_from_url(url):
     except:
         pass
     return "unknown"
+
+
+@app.task(bind=True)
+def crawl_ptt_page_list_task(self, board_name, page_url, page_number, target_days=30):
+    """
+    分散式爬蟲：爬取單頁文章列表，並分發單篇文章任務
+
+    Args:
+        board_name: 版面名稱
+        page_url: 頁面網址
+        page_number: 頁面編號
+        target_days: 目標天數 (只爬取指定天數內的文章)
+
+    Returns:
+        dict: 包含分發的任務數量、過舊文章檢測等資訊
+    """
+    print(f"📄 Worker {self.request.id[:8]} 開始處理頁面 {page_number}")
+    print(f"🔗 頁面網址: {page_url}")
+
+    try:
+        # 爬取頁面列表
+        ua = UserAgent()
+        headers = {'User-Agent': ua.random}
+
+        time.sleep(random.uniform(PTT_DELAY_MIN, PTT_DELAY_MAX))
+        response = requests.get(page_url, cookies={'over18': '1'},
+                                headers=headers, timeout=PTT_TIMEOUT)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # 使用 CSS 選擇器取得所有文章
+        all_articles = soup.select('div.r-ent')
+        if not all_articles:
+            print("❌ 找不到任何文章")
+            return {'status': 'error', 'message': '找不到任何文章'}
+
+        # 只有第一頁（最新頁面）需要檢查分隔線，其他頁面直接處理所有文章
+        articles_to_process = []
+        skipped_pinned = 0
+
+        # 判斷是否為第一頁（通過檢查是否有分隔線）
+        separator = soup.select_one('div.r-list-sep')
+
+        if separator:
+            # 第一頁：只處理分隔線之前的文章
+            print(f"📌 第一頁：發現分隔線，將排除置頂文章")
+            list_container = soup.select_one('div.r-list-container')
+            if list_container:
+                all_elements = list_container.select(
+                    'div.r-ent, div.r-list-sep')
+                for element in all_elements:
+                    if 'r-list-sep' in element.get('class', []):
+                        # 遇到分隔線，停止收集文章
+                        print(f"📌 分隔線前共收集 {len(articles_to_process)} 篇文章")
+                        break
+                    elif 'r-ent' in element.get('class', []):
+                        articles_to_process.append(element)
+                skipped_pinned = len(all_articles) - len(articles_to_process)
+            else:
+                articles_to_process = all_articles
+        else:
+            # 非第一頁：處理所有文章
+            print(f"📄 非第一頁：處理所有文章")
+            articles_to_process = all_articles
+
+        article_tasks = []
+        old_articles_count = 0
+        dispatched_count = 0
+
+        print(
+            f"📋 頁面 {page_number} 總計 {len(all_articles)} 篇文章，將處理 {len(articles_to_process)} 篇（排除 {skipped_pinned} 篇置頂）")
+
+        cutoff_date = datetime.datetime.now() - datetime.timedelta(days=target_days)
+
+        for article in articles_to_process:
+            try:
+                # 取得文章連結
+                title_div = article.find('div', class_='title')
+                if not title_div:
+                    continue
+
+                link_element = title_div.find('a')
+                if not link_element:
+                    print("   ⚠️ 跳過已刪除文章")
+                    continue
+
+                article_url = 'https://www.ptt.cc' + link_element['href']
+                article_title = link_element.get_text().strip()
+
+                # 取得文章日期
+                date_div = article.find('div', class_='date')
+                if not date_div:
+                    continue
+
+                date_str = date_div.get_text().strip()
+
+                # 解析日期 (格式: "12/29")
+                try:
+                    month, day = map(int, date_str.split('/'))
+                    current_year = datetime.datetime.now().year
+                    article_date = datetime.datetime(current_year, month, day)
+
+                    # 如果文章日期在未來，表示是去年的文章
+                    if article_date > datetime.datetime.now():
+                        article_date = article_date.replace(
+                            year=current_year - 1)
+
+                except (ValueError, IndexError):
+                    print(f"⚠️ 無法解析日期: {date_str}")
+                    continue
+
+                # 檢查文章是否在目標時間範圍內
+                if article_date < cutoff_date:
+                    old_articles_count += 1
+                    print(f"⏰ 發現過舊文章: {article_title[:30]}... ({date_str})")
+                    continue
+
+                # 分發單篇文章任務
+                print(f"📤 分發文章任務: {article_title[:40]}...")
+                result = crawl_single_article_task.apply_async(
+                    args=[article_url],
+                    queue='ptt'
+                )
+                article_tasks.append({
+                    'task_id': result.id,
+                    'article_url': article_url,
+                    'article_title': article_title,
+                    'article_date': date_str
+                })
+                dispatched_count += 1
+
+            except Exception as e:
+                print(f"⚠️ 處理文章時出錯: {e}")
+                continue
+
+        total_articles_count = len(soup.find_all('div', class_='r-ent'))
+
+        result_info = {
+            'status': 'success',
+            'page_number': page_number,
+            'page_url': page_url,
+            'total_articles': total_articles_count,
+            'dispatched_tasks': dispatched_count,
+            'old_articles': old_articles_count,
+            'skipped_pinned': skipped_pinned,
+            'article_tasks': article_tasks,
+            'should_stop': old_articles_count > 0,  # 如果有過舊文章，建議停止
+            'message': f"頁面 {page_number} 處理完成，分發 {dispatched_count} 個任務，跳過 {skipped_pinned} 個置頂文章"
+        }
+
+        print(f"✅ 頁面 {page_number} 處理完成")
+        print(
+            f"📊 統計: 總計{total_articles_count}篇，分發{dispatched_count}個任務，過舊{old_articles_count}篇，跳過置頂{skipped_pinned}篇")
+
+        return result_info
+
+    except Exception as e:
+        error_msg = f"處理頁面 {page_number} 時發生錯誤: {str(e)}"
+        print(f"❌ {error_msg}")
+
+        return {
+            'status': 'error',
+            'page_number': page_number,
+            'page_url': page_url,
+            'error': error_msg,
+            'should_stop': False
+        }
